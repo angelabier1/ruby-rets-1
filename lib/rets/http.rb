@@ -11,6 +11,7 @@ module RETS
       @request_count = 1
       @headers = {"User-Agent" => (user_agent || "Ruby RETS/v#{RETS::VERSION}")}
       @auth = auth
+      @auth_mode  = nil  # just to clear up warnings
     end
 
     ##
@@ -107,8 +108,8 @@ module RETS
       http.start do
         http.request_get(request_uri, args[:headers]) do |response|
           # We already authed, and the request became stale so we have to switch to the new auth
-          if @auth_mode == :digest and response.header["www-authenticate"] =~ /stale=true/i
-            mode, header = response.header["www-authenticate"].split(" ", 2)
+          if @auth_mode == :digest and response["www-authenticate"] =~ /stale=true/i
+            mode, header = response["www-authenticate"].split(" ", 2)
 
             save_digest(header)
 
@@ -122,9 +123,9 @@ module RETS
 
             # We're already trying to auth, and we still get an invalid auth, can call it a bust and raise
             raise RETS::InvalidAuth.new("Failed to login") if args[:authing]
-            raise RETS::UnsupportedAuth.new("Unknown authentication method used") unless response.header["www-authenticate"]
+            raise RETS::UnsupportedAuth.new("Unknown authentication method used") unless response["www-authenticate"]
 
-            mode, header = response.header["www-authenticate"].split(" ", 2)
+            mode, header = response["www-authenticate"].split(" ", 2)
             raise RETS::UnsupportedAuth.new("Unknown HTTP Auth, not digest or basic") unless mode == "Digest" or mode == "Basic"
 
             args[:authing] = true
@@ -137,8 +138,8 @@ module RETS
 
           # We just tried to auth, so call the block manually
           elsif args[:authing]
-            if response.header["set-cookie"]
-              cookies = response.header["set-cookie"].split(",").map do |cookie|
+            if response["set-cookie"]
+              cookies = response["set-cookie"].split(",").map do |cookie|
                 cookie.split(";").first.strip
               end
 

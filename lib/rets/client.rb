@@ -46,7 +46,7 @@ module RETS
           @urls[ability] = URI.parse(url)
         end
 
-        if response.header["rets-version"] =~ /RETS\/(.+)/i
+        if response["rets-version"] =~ /RETS\/(.+)/i
           @rets_version = $1.to_f
         else
           raise RETS::InvalidResponse.new("Cannot find RETS-Version header.")
