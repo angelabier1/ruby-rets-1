@@ -14,10 +14,14 @@ module RETS
       # @return [String] SHA1 hash of the request.
       attr_accessor :request_hash
 
-      def initialize(http, version, urls)
+      #Can be called anytime after logging in to get the metadata version information.
+      attr_accessor :metadata_version
+
+      def initialize(http, version, urls, meta)
         @http = http
         @urls = urls
         @active_version = version
+        @metadata_version = meta
       end
 
       ##

@@ -3,6 +3,7 @@ require "nokogiri"
 module RETS
   class Client
     URL_KEYS = {:getobject => true, :login => true, :logout => true, :search => true, :getmetadata => true}
+    META_DATA_KEYS = {:metadataversion => true, :minmetadataversion => true, :metadatatimestamp => true, :minmetadatatimestamp => true}
 
     ##
     # Attempts to login to a RETS server.
@@ -19,6 +20,7 @@ module RETS
     #   Successful login will return a {RETS::Base::Core}. Otherwise it can raise a {RETS::InvalidResponse} or {RETS::ServerError} exception depending on why it was unable to login.
     def self.login(args)
       @urls = {:login => URI.parse(args[:url])}
+      @meta = {}
       base_url = @urls[:login].to_s.gsub(@urls[:login].path, "")
 
       http = RETS::HTTP.new({:username => args[:username], :password => args[:password], :ua_auth => args[:ua_auth], :ua_username => args[:ua_username], :ua_password => args[:ua_password]}, args[:user_agent])
@@ -29,21 +31,24 @@ module RETS
         end
 
         doc = Nokogiri::XML(response.body)
-
+        
         code = doc.xpath("//RETS").attr("ReplyCode").value
         unless code == "0"
           raise RETS::ServerError.new("#{doc.xpath("//RETS").attr("ReplyText").value} (ReplyCode #{code})")
         end
 
         doc.xpath("//RETS").first.content.split("\n").each do |row|
-          ability, url = row.split("=", 2)
-          next unless ability and url
-          ability, url = ability.downcase.strip.to_sym, url.strip
-          next unless URL_KEYS[ability]
+          k, v = row.split("=", 2)
+          next unless k and v
+          k, v = k.downcase.strip.to_sym, v.strip
 
-          # In case it's a relative path and doesn't include the domain
-          url = "#{base_url}#{url}" unless url =~ /(http|www)/
-          @urls[ability] = URI.parse(url)
+          if META_DATA_KEYS[k]
+            @meta[k] = v
+          elsif URL_KEYS[k]
+            # In case it's a relative path and doesn't include the domain
+            v = "#{base_url}#{v}" unless v =~ /(http|www)/
+            @urls[k] = URI.parse(v)
+          end
         end
 
         if response["rets-version"] =~ /RETS\/(.+)/i
@@ -55,11 +60,13 @@ module RETS
 
       begin
         model = RETS.const_get("V#{@rets_version.gsub(".", "")}::Core")
+        meta_v = RETS.const_get("V#{@rets_version.gsub(".", "")}::MetadataVersion")
       rescue NameError => e
         model = RETS::Base::Core
+        meta_v = RETS::Base::MetadataVersion
       end
-
-      model.new(http, @rets_version, @urls)
+      m =  meta_v.new(@meta)
+      model.new(http, @rets_version, @urls, m)
     end
   end
 end
